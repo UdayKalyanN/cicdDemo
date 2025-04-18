@@ -1,84 +1,81 @@
 pipeline {
-    agent any
-    
+    agent {
+        docker {
+            image 'abhishekf5/maven-abhishek-docker-agent:v1'
+            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
+
     environment {
-        DOCKER_REGISTRY_CREDENTIALS = 'dockerhub-credentials'
         DOCKER_HUB_USERNAME = 'udaykalyannuthalapati'
-        VERSION = "${env.BUILD_NUMBER}"
+        DOCKER_IMAGE_BACKEND = "${DOCKER_HUB_USERNAME}/demo-backend:${BUILD_NUMBER}"
+        DOCKER_IMAGE_FRONTEND = "${DOCKER_HUB_USERNAME}/demo-frontend:${BUILD_NUMBER}"
+        REGISTRY_CREDENTIALS = credentials('dockerhub-credentials')
         GIT_REPO_NAME = "cicdDemo"
         GIT_USER_NAME = "UdayKalyanN"
     }
-    
+
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'main', 
+                    url: 'https://github.com/UdayKalyanN/cicdDemo.git'
             }
         }
-        
-        stage('Build & Test') {
+
+        stage('Build and Test') {
             steps {
-                sh '''
-                    mvn clean package \
-                        -DskipTests=false \
-                        -Dmaven.test.failure.ignore=false
-                '''
-            }
-            post {
-                always {
-                    junit '**/target/surefire-reports/*.xml'
-                }
+                sh 'ls -ltr'
+                // Build the backend project
+                sh 'mvn clean package'
             }
         }
-        
-        stage('SonarQube Analysis') {
+
+        stage('Static Code Analysis') {
+            environment {
+                SONAR_URL = "http://localhost:9000"  // Update this with your SonarQube URL
+            }
             steps {
-                withSonarQubeEnv('My Sonar') {
+                withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
                     sh '''
                         mvn sonar:sonar \
+                            -Dsonar.login=$SONAR_AUTH_TOKEN \
+                            -Dsonar.host.url=${SONAR_URL} \
                             -Dsonar.projectKey=${JOB_NAME} \
-                            -Dsonar.projectName=${JOB_NAME} \
-                            -Dsonar.projectVersion=${VERSION}
+                            -Dsonar.projectName=${JOB_NAME}
                     '''
-                }
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
                 }
             }
         }
-        
-        stage('Docker Build & Push') {
+
+        stage('Build and Push Docker Images') {
             steps {
                 script {
-                    // Login to Docker Hub using credentials
-                    withCredentials([usernamePassword(credentialsId: env.DOCKER_REGISTRY_CREDENTIALS, passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
-                        sh "docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}"
-                        
-                        // Build and push backend
-                        def backendImageName = "${env.DOCKER_HUB_USERNAME}/demo-backend"
+                    // Login to Docker Hub
+                    sh 'echo $REGISTRY_CREDENTIALS_PSW | docker login -u $REGISTRY_CREDENTIALS_USR --password-stdin'
+
+                    // Build and push backend image
+                    sh """
+                        docker build -t ${DOCKER_IMAGE_BACKEND} \
+                                   -t ${DOCKER_HUB_USERNAME}/demo-backend:latest \
+                                   --build-arg BUILD_VERSION=${BUILD_NUMBER} \
+                                   --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+                                   .
+                        docker push ${DOCKER_IMAGE_BACKEND}
+                        docker push ${DOCKER_HUB_USERNAME}/demo-backend:latest
+                    """
+
+                    // Build and push frontend image
+                    dir('frontend') {
                         sh """
-                            docker build -t ${backendImageName}:${VERSION} \
-                                       -t ${backendImageName}:latest \
-                                       --build-arg BUILD_VERSION=${VERSION} \
+                            docker build -t ${DOCKER_IMAGE_FRONTEND} \
+                                       -t ${DOCKER_HUB_USERNAME}/demo-frontend:latest \
+                                       --build-arg BUILD_VERSION=${BUILD_NUMBER} \
                                        --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                                        .
-                            docker push ${backendImageName}:${VERSION}
-                            docker push ${backendImageName}:latest
+                            docker push ${DOCKER_IMAGE_FRONTEND}
+                            docker push ${DOCKER_HUB_USERNAME}/demo-frontend:latest
                         """
-                        
-                        // Build and push frontend
-                        dir('frontend') {
-                            def frontendImageName = "${env.DOCKER_HUB_USERNAME}/demo-frontend"
-                            sh """
-                                docker build -t ${frontendImageName}:${VERSION} \
-                                           -t ${frontendImageName}:latest \
-                                           --build-arg BUILD_VERSION=${VERSION} \
-                                           --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-                                           .
-                                docker push ${frontendImageName}:${VERSION}
-                                docker push ${frontendImageName}:latest
-                            """
-                        }
                     }
                 }
             }
@@ -89,100 +86,38 @@ pipeline {
             }
         }
 
-        stage('Clone Config Repo') {
-            steps {
-                script {
-                    // Backup current directory
-                    sh 'pwd > pwd.tmp'
-                    
-                    // Clone the config repository
-                    dir('config-repo') {
-                        git branch: 'main',
-                            url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git"
-                    }
-                }
-            }
-        }
-
         stage('Update Deployment Files') {
             steps {
-                script {
-                    // Move to config repo directory
-                    dir('config-repo') {
-                        withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                            sh """
-                                git config user.email "nudaykalyan06@gmail.com"
-                                git config user.name "UdayKalyanN"
-                                
-                                # Update backend deployment image tag
-                                sed -i '' "s|image: udaykalyannuthalapati/demo-backend:.*|image: udaykalyannuthalapati/demo-backend:${VERSION}|g" ci-cd-manifests/backend-deployment.yaml
-                                
-                                # Update frontend deployment image tag
-                                sed -i '' "s|image: udaykalyannuthalapati/demo-frontend:.*|image: udaykalyannuthalapati/demo-frontend:${VERSION}|g" ci-cd-manifests/frontend-deployment.yaml
-                                
-                                # Stage the changes
-                                git add ci-cd-manifests/backend-deployment.yaml ci-cd-manifests/frontend-deployment.yaml
-                                
-                                # Commit and push if there are changes
-                                if git diff --staged --quiet; then
-                                    echo "No changes to commit"
-                                else
-                                    git commit -m "Update deployment images to version ${VERSION}"
-                                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                                fi
-                            """
-                        }
-                    }
-                }
-            }
-            post {
-                always {
-                    // Clean up cloned repository
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                     sh '''
-                        rm -rf config-repo
-                        if [ -f pwd.tmp ]; then
-                            cd $(cat pwd.tmp)
-                            rm pwd.tmp
-                        fi
+                        git config user.email "nudaykalyan06@gmail.com"
+                        git config user.name "UdayKalyanN"
+                        
+                        # Update backend deployment
+                        sed -i "s|image: ${DOCKER_HUB_USERNAME}/demo-backend:.*|image: ${DOCKER_HUB_USERNAME}/demo-backend:${BUILD_NUMBER}|g" ci-cd-manifests/backend-deployment.yaml
+                        
+                        # Update frontend deployment
+                        sed -i "s|image: ${DOCKER_HUB_USERNAME}/demo-frontend:.*|image: ${DOCKER_HUB_USERNAME}/demo-frontend:${BUILD_NUMBER}|g" ci-cd-manifests/frontend-deployment.yaml
+                        
+                        # Commit and push changes
+                        git add ci-cd-manifests/backend-deployment.yaml ci-cd-manifests/frontend-deployment.yaml
+                        git commit -m "Update deployment images to version ${BUILD_NUMBER}"
+                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                     '''
                 }
             }
         }
     }
-    
+
     post {
         always {
             cleanWs()
         }
         success {
             echo '✅ Pipeline succeeded'
-            slackSend(
-                color: 'good',
-                message: """
-                    Build Successful!
-                    Job: ${env.JOB_NAME}
-                    Build Number: ${VERSION}
-                    Images Updated:
-                    - ${DOCKER_HUB_USERNAME}/demo-backend:${VERSION}
-                    - ${DOCKER_HUB_USERNAME}/demo-frontend:${VERSION}
-                    
-                    Deployment files have been updated in the repository.
-                """
-            )
         }
         failure {
             echo '❌ Pipeline failed'
-            mail(
-                to: 'nudaykalyan06@gmail.com',
-                subject: "Build #${VERSION} Failed - ${env.JOB_NAME}",
-                body: """
-                    Job: ${env.JOB_NAME}
-                    Build Number: ${VERSION}
-                    Build URL: ${env.BUILD_URL}
-                    
-                    Please check Jenkins for more details.
-                """
-            )
         }
     }
 }
