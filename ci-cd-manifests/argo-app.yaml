@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: 'https://github.com/UdayKalyanN/cicdDemo.git'
     targetRevision: main
-    path: ci‑cd‑manifests
+    path: '.'
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: default
