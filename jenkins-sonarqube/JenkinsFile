@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'abhishekf5/maven-abhishek-docker-agent:v1'
+            image 'udaykalyannuthalapati/maven-docker-agent:latest'
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
@@ -25,15 +25,16 @@ pipeline {
 
         stage('Build and Test') {
             steps {
-                sh 'ls -ltr'
-                // Build the backend project
-                sh 'mvn clean package'
+                sh '''
+                    mvn --version
+                    mvn clean package -DskipTests=false
+                '''
             }
         }
 
         stage('Static Code Analysis') {
             environment {
-                SONAR_URL = "http://localhost:9000"  // Update this with your SonarQube URL
+                SONAR_URL = "http://localhost:9000"
             }
             steps {
                 withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
@@ -52,30 +53,25 @@ pipeline {
             steps {
                 script {
                     // Login to Docker Hub
-                    sh 'echo $REGISTRY_CREDENTIALS_PSW | docker login -u $REGISTRY_CREDENTIALS_USR --password-stdin'
-
-                    // Build and push backend image
-                    sh """
-                        docker build -t ${DOCKER_IMAGE_BACKEND} \
-                                   -t ${DOCKER_HUB_USERNAME}/demo-backend:latest \
-                                   --build-arg BUILD_VERSION=${BUILD_NUMBER} \
-                                   --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-                                   .
-                        docker push ${DOCKER_IMAGE_BACKEND}
-                        docker push ${DOCKER_HUB_USERNAME}/demo-backend:latest
-                    """
-
-                    // Build and push frontend image
-                    dir('frontend') {
-                        sh """
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                        sh '''
+                            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+                            
+                            # Build and push backend image
+                            docker build -t ${DOCKER_IMAGE_BACKEND} \
+                                       -t ${DOCKER_HUB_USERNAME}/demo-backend:latest \
+                                       .
+                            docker push ${DOCKER_IMAGE_BACKEND}
+                            docker push ${DOCKER_HUB_USERNAME}/demo-backend:latest
+                            
+                            # Build and push frontend image
+                            cd frontend
                             docker build -t ${DOCKER_IMAGE_FRONTEND} \
                                        -t ${DOCKER_HUB_USERNAME}/demo-frontend:latest \
-                                       --build-arg BUILD_VERSION=${BUILD_NUMBER} \
-                                       --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                                        .
                             docker push ${DOCKER_IMAGE_FRONTEND}
                             docker push ${DOCKER_HUB_USERNAME}/demo-frontend:latest
-                        """
+                        '''
                     }
                 }
             }
@@ -115,6 +111,8 @@ pipeline {
         }
         success {
             echo '✅ Pipeline succeeded'
+            echo "Backend Image: ${DOCKER_IMAGE_BACKEND}"
+            echo "Frontend Image: ${DOCKER_IMAGE_FRONTEND}"
         }
         failure {
             echo '❌ Pipeline failed'
