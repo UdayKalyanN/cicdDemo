@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: localhost:5000/backend:0.1.0
+        image: udaykalyannuthalapati/demo-backend:latest
         ports:
         - containerPort: 8080
         env:

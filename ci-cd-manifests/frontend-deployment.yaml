@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: localhost:5000/frontend:0.1.0
+        image: udaykalyannuthalapati/demo-frontend:latest
         ports:
         - containerPort: 80

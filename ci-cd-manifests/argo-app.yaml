@@ -6,9 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/you/ci-cd-manifests.git'
+    repoURL: 'https://github.com/UdayKalyanN/cicdDemo.git'
     targetRevision: main
-    path: '.'
+    path: ci‑cd‑manifests
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: default
