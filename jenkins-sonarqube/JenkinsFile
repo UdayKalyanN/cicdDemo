@@ -1,0 +1,34 @@
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Build & Test') {
+      steps {
+        sh 'mvn clean package'
+      }
+    }
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('My Sonar') {
+          sh 'mvn sonar:sonar'
+        }
+      }
+    }
+    stage('Docker Build & Push') {
+      steps {
+        script {
+          docker.withRegistry('http://localhost:5000','') {
+            docker.build("backend:${env.BUILD_NUMBER}").push()
+            dir('frontend') {
+              docker.build("frontend:${env.BUILD_NUMBER}").push()
+            }
+          }
+        }
+      }
+    }
+  }
+  post {
+    success { echo '✅ Pipeline succeeded' }
+    failure { mail to: 'nudaykalyan06@gmail.com', subject: "Build #${env.BUILD_NUMBER} Failed", body: 'Check Jenkins.' }
+  }
+}
