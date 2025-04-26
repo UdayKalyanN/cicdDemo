@@ -6,7 +6,7 @@ function App() {
   const [greeting, setGreeting] = useState('');
 
   useEffect(() => {
-    fetch('http://localhost:8080/hello')
+    fetch('http://localhost:8000/hello')
       .then(r => r.json())
       .then(data => setMsg(data.msg))
       .catch(() => setMsg('Error fetching hello'));
@@ -14,7 +14,7 @@ function App() {
 
   const handleGreet = () => {
     if (!name.trim()) return;
-    fetch('http://localhost:8080/greet', {
+    fetch('http://localhost:8000/greet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })

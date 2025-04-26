@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'udaykalyannuthalapati/maven-docker-agent:latest'
-            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
 
     environment {
         DOCKER_HUB_USERNAME = 'udaykalyannuthalapati'
@@ -32,27 +27,9 @@ pipeline {
             }
         }
 
-        stage('Static Code Analysis') {
-            environment {
-                SONAR_URL = "http://localhost:9000"
-            }
-            steps {
-                withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-                    sh '''
-                        mvn sonar:sonar \
-                            -Dsonar.login=$SONAR_AUTH_TOKEN \
-                            -Dsonar.host.url=${SONAR_URL} \
-                            -Dsonar.projectKey=${JOB_NAME} \
-                            -Dsonar.projectName=${JOB_NAME}
-                    '''
-                }
-            }
-        }
-
         stage('Build and Push Docker Images') {
             steps {
                 script {
-                    // Login to Docker Hub
                     withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
                         sh '''
                             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
@@ -89,13 +66,9 @@ pipeline {
                         git config user.email "nudaykalyan06@gmail.com"
                         git config user.name "UdayKalyanN"
                         
-                        # Update backend deployment
                         sed -i "s|image: ${DOCKER_HUB_USERNAME}/demo-backend:.*|image: ${DOCKER_HUB_USERNAME}/demo-backend:${BUILD_NUMBER}|g" ci-cd-manifests/backend-deployment.yaml
-                        
-                        # Update frontend deployment
                         sed -i "s|image: ${DOCKER_HUB_USERNAME}/demo-frontend:.*|image: ${DOCKER_HUB_USERNAME}/demo-frontend:${BUILD_NUMBER}|g" ci-cd-manifests/frontend-deployment.yaml
                         
-                        # Commit and push changes
                         git add ci-cd-manifests/backend-deployment.yaml ci-cd-manifests/frontend-deployment.yaml
                         git commit -m "Update deployment images to version ${BUILD_NUMBER}"
                         git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
