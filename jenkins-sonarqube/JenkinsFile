@@ -25,11 +25,12 @@ pipeline {
 
         stage('Build and Test') {
             steps {
-                sh 'cd backend'
-                sh '''
-                    mvn --version
-                    mvn clean package
-                '''
+                dir('backend') {
+                    sh '''
+                        mvn --version
+                        mvn clean package
+                    '''
+                }
             }
         }
 
