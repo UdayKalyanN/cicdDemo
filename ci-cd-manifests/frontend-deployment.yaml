@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: udaykalyannuthalapati/demo-frontend:latest
+        image: udaykalyannuthalapati/demo-frontend:9
         ports:
         - containerPort: 80

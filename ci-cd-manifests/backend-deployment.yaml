@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: udaykalyannuthalapati/demo-backend:latest
+        image: udaykalyannuthalapati/demo-backend:9
         ports:
         - containerPort: 8000
         env:
