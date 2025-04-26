@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'maven:3.9.6-eclipse-temurin-11'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     environment {
         DOCKER_HUB_USERNAME = 'udaykalyannuthalapati'
@@ -20,9 +25,10 @@ pipeline {
 
         stage('Build and Test') {
             steps {
+                sh 'cd backend'
                 sh '''
                     mvn --version
-                    mvn clean package -DskipTests=false
+                    mvn clean package
                 '''
             }
         }
@@ -79,9 +85,6 @@ pipeline {
     }
 
     post {
-        always {
-            cleanWs()
-        }
         success {
             echo '✅ Pipeline succeeded'
             echo "Backend Image: ${DOCKER_IMAGE_BACKEND}"
