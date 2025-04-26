@@ -44,19 +44,18 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
                         sh '''
                             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
-                            
+
                             # Build and push backend image
                             docker build -t ${DOCKER_IMAGE_BACKEND} \
-                                       -t ${DOCKER_HUB_USERNAME}/demo-backend:latest \
-                                       .
+                                        -t ${DOCKER_HUB_USERNAME}/demo-backend:latest \
+                                        -f backend/Dockerfile backend
                             docker push ${DOCKER_IMAGE_BACKEND}
                             docker push ${DOCKER_HUB_USERNAME}/demo-backend:latest
-                            
+
                             # Build and push frontend image
-                            cd frontend
                             docker build -t ${DOCKER_IMAGE_FRONTEND} \
-                                       -t ${DOCKER_HUB_USERNAME}/demo-frontend:latest \
-                                       .
+                                        -t ${DOCKER_HUB_USERNAME}/demo-frontend:latest \
+                                        -f frontend/Dockerfile frontend
                             docker push ${DOCKER_IMAGE_FRONTEND}
                             docker push ${DOCKER_HUB_USERNAME}/demo-frontend:latest
                         '''
