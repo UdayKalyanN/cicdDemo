@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'maven:3.9.6-eclipse-temurin-11'
+            image 'udaykalyannuthalapati/maven-docker-agent:latest'
             args '-v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
@@ -27,6 +27,10 @@ pipeline {
             steps {
                 dir('backend') {
                     sh '''
+                        echo "Current directory: $(pwd)"
+                        echo "Listing contents:"
+                        ls -l
+                        cat pom.xml
                         mvn --version
                         mvn clean package
                     '''

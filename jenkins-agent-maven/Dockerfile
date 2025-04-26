@@ -1,5 +1,5 @@
-# 1. Start from official Maven + OpenJDK 11
-FROM maven:3.9.6-eclipse-temurin-11
+# 1. Start from official Maven + OpenJDK 17
+FROM maven:3.9.6-eclipse-temurin-17
 
 # 2. Switch to root to install Docker CLI & git
 USER root
